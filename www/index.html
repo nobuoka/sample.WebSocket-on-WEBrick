@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>test</title>
+  </head>
+  <body>
+    <p>test</p>
+    <script type="text/javascript" src="http://ajax.googleapis.com/ajax/libs/jquery/1.4.2/jquery.min.js"></script>
+        <script type="text/javascript">
+          function log (msg) {
+            $('#log').text($('#log').text() + msg + "\n");
+          }
+
+$(function () {
+    var ws = new WebSocket('ws://localhost:10080/websocket/test');
+
+    log('WebSocket start');
+
+    ws.onopen = function () {
+    log('connected');
+    };
+
+    ws.onmessage = function (ev) {
+    log('received: ' + ev.data);
+    };
+
+    ws.onerror = function (ev) {
+    log('error: ' + ev.data);
+    }
+
+    ws.onclose = function (ev) {
+    log('closed');
+    }
+
+    $('#form').submit(function () {
+        var data = $('#message').val();
+        ws.send(data);
+        $('#message').val('');
+        log('sent: ' + data);
+        return false;
+        });
+});
+</script>
+    <form id="form">
+      <input type="text" name="message" id="message" />
+      <input type="submit" />
+    </form>
+    <pre id="log"></pre>
+  </body>
+</html>
