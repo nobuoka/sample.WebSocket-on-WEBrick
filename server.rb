@@ -1,7 +1,10 @@
 #! ruby -EUTF-8:UTF-8
 # coding: UTF-8
 
+$LOAD_PATH.unshift File.join( File.dirname(__FILE__), 'lib' )
+
 require 'webrick'
+require 'webrick/httpresponse-extension'
 
 server = WEBrick::HTTPServer.new(
              DocumentRoot: File.join( File.dirname(__FILE__), 'www' ),
@@ -10,51 +13,17 @@ server = WEBrick::HTTPServer.new(
              Logger:       WEBrick::Log.new( $stderr, WEBrick::Log::DEBUG ),
 )
 
-server.mount_proc( '/websocket' ) do |req, res|
-
-  # TODO check
-  p req['Connection']
-  p req['Upgrade']
-
-  #my %http_conn = map{ ( lc( $_ ), 1 ) } split ( / *, */, $env->{'HTTP_CONNECTION'} );
-  #my %http_upgr = map{ ( lc( $_ ), 1 ) } split ( / *, */, $env->{'HTTP_UPGRADE'} );
-  #unless ( $http_conn{'upgrade'} && $http_upgr{'websocket'} ) {
-  #  $self->error_code(401);
-  #  return;
-  #}
-
-  require 'base64'
-  p Base64
-
-  key = req['Sec-WebSocket-Key']
-  raise 'no key' unless key # TODO check
-  kk  = key + '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
-  digest = Base64.strict_encode64( Digest::SHA1.digest( kk ) )
-
-  res.status = WEBrick::HTTPStatus::RC_SWITCHING_PROTOCOLS # '101'
-  res['Upgrade']    = 'websocket'
-  res['Connection'] = 'Upgrade'
-  res['Sec-WebSocket-Accept'] = digest
-
-  def res.send_response(socket)
-    begin
-      setup_header()
-      @header['connection'] = 'Upgrade'
-      send_header(socket)
-      #send_body(socket)
-      # ここで WebSocket プロトコルを使う
-      ws = WebSocket.new( socket )
-      ws.start() # on_start(), socket 読み取り開始
-      # start が終わるのは通信が終わるとき
-    rescue Errno::EPIPE, Errno::ECONNRESET, Errno::ENOTCONN => ex
-      @logger.debug(ex)
-      @keep_alive = false
-    rescue Exception => ex
-      @logger.error(ex)
-      @keep_alive = false
-    end
+class Listener
+  def onstart( server_agent )
+    $stderr << "[DEBUG] onstart\n"
   end
+  def onclose( server_agent )
+    $stderr << "[DEBUG] onclose\n"
+  end
+end
 
+server.mount_proc( '/websocket' ) do |req, res|
+  res.upgrade_websocket( req, Listener.new )
 end
 
 # TODO
@@ -80,8 +49,9 @@ class WebSocket
   ST_RUNNING      = :running
   ST_STOPPING     = :stopping
   ST_STOPPED      = :stopped
-  def initialize( sock )
+  def initialize( sock, event_listener )
     @sock = sock
+    @listener = event_listener
     @state = ST_BEFORE_START
     @buf_for_normal_header      = ''
     @buf_for_ext_payload_length = ''
@@ -92,7 +62,7 @@ class WebSocket
     @state = ST_STARTING
     # TODO 2 回呼ばれた場合の処理
     begin
-      onstart()
+      @listener.onstart( self )
       while true
         frame = _read_frame
         p frame
@@ -104,7 +74,7 @@ class WebSocket
       end
     ensure
       # TODO どこで close フレーム送信をすべきか
-      onclose()
+      @listener.onclose( self )
     end
   end
   def send_text( str )
@@ -115,12 +85,6 @@ class WebSocket
     @state = ST_STOPPING
     # とりあえず
     @sock << [ 0x88, 0x00 ].map{ |b| b.chr( Encoding::ASCII_8BIT ) }.join()
-  end
-
-  def onstart()
-  end
-  def onclose()
-    $stderr << "[DEBUG] onclose\n"
   end
 
   def _send_frame( frame )
