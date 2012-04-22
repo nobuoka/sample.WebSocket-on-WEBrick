@@ -1,8 +1,10 @@
 # coding: UTF-8
 
 require 'base64'
+require 'websocket/server_agent'
 
-class WEBrick::HTTPResponse
+module WEBrick
+class HTTPResponse
 
   # evt_listener は onstart, onmessage, onerror, onclose メソッドが
   # 定義されたオブジェクト
@@ -38,7 +40,7 @@ class WEBrick::HTTPResponse
         send_header(socket)
         #send_body(socket)
         # ここで WebSocket プロトコルを使う
-        ws = WebSocket.new( socket, @websocket_event_listener )
+        ws = WebSocket::ServerAgent.new( socket, @websocket_event_listener )
         ws.start() # on_start(), socket 読み取り開始
         # start が終わるのは通信が終わるとき
       rescue Errno::EPIPE, Errno::ECONNRESET, Errno::ENOTCONN => ex
@@ -51,4 +53,5 @@ class WEBrick::HTTPResponse
     end
   end
 
+end
 end
