@@ -3,6 +3,7 @@
 
 $LOAD_PATH.unshift File.join( File.dirname(__FILE__), 'lib' )
 
+require 'set'
 require 'webrick'
 require 'webrick/httpresponse-extension'
 
@@ -13,17 +14,29 @@ server = WEBrick::HTTPServer.new(
              Logger:       WEBrick::Log.new( $stderr, WEBrick::Log::DEBUG ),
 )
 
+agent_set = Set.new()
 class Listener
-  def onstart( server_agent )
+  def initialize( agent_set )
+    @agent_set = agent_set
+  end
+  def onopen( server_agent )
     $stderr << "[DEBUG] onstart\n"
+    @agent_set.add server_agent
   end
   def onclose( server_agent )
     $stderr << "[DEBUG] onclose\n"
+    @agent_set.delete server_agent
+  end
+  def onmessage( server_agent, data, type )
+    @agent_set.each do |agent|
+      agent.send_text( data )
+    end
   end
 end
 
+listener = Listener.new( agent_set )
 server.mount_proc( '/websocket' ) do |req, res|
-  res.upgrade_websocket( req, Listener.new )
+  res.upgrade_websocket( req, listener )
 end
 
 # TODO

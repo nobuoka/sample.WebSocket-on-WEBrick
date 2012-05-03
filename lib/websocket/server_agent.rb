@@ -26,24 +26,31 @@ class ServerAgent
     @state = ST_STARTING
     # TODO 2 回呼ばれた場合の処理
     begin
-      @listener.onstart( self )
+      @listener.onopen( self )
       while true
         frame = _read_frame
-        p frame
-        if frame.type == Frame::TYPE_CLOSE
-          # まだ close フレームを送っていないなら送る
-          _send_close_frame() if @state == ST_RUNNING
-          break
+        # close frame
+        break if frame.type == Frame::TYPE_CLOSE
+        # control frame (except close frame)
+        if frame.is_control_frame?
+          _receive_control_frame( frame )
+        # data frame
+        else
+          _receive_data_frame( frame )
         end
       end
     ensure
       # TODO どこで close フレーム送信をすべきか
+      # まだ close フレームを送っていないなら送る
+      _send_close_frame() if @state == ST_RUNNING
       @listener.onclose( self )
     end
   end
 
   def send_text( str )
-    # TODO implement
+    str.force_encoding( Encoding::ASCII_8BIT )
+    f = Frame.create_frame( true, false, false, false, Frame::TYPE_TEXT, str )
+    @sock << f.to_binary_string
   end
 
   def _send_close_frame()
@@ -54,6 +61,37 @@ class ServerAgent
 
   def _send_frame( frame )
     # TODO 複数スレッドからのアクセス時の挙動
+  end
+
+  FRAGMENTED_DATA_FRAME_BUF = []
+  def _receive_data_frame( frame )
+    $stderr << "[DEBUG] Data frame received : #{frame}\n"
+    if frame.fin?
+      type = nil
+      if frame.type == Frame::TYPE_CONTINUATION
+        # TODO 実装
+        data = FRAGMENTED_DATA_FRAME_BUF.inject(''){|d,f| d << f.data }
+        type = FRAGMENTED_DATA_FRAME_BUF[0].type
+        FRAGMENTED_DATA_FRAME_BUF.clear
+      else
+        # TODO BUF が空なことを確認
+        data = frame.data
+        type = frame.type
+      end
+      if type == Frame::TYPE_TEXT
+        data.force_encoding( Encoding::UTF_8 )
+      end
+      @listener.onmessage( self, data, type )
+    else
+      if frame.type != Frame::TYPE_CONTINUATION
+        # TODO BUF が空なことを確認
+      end
+      FRAGMENTED_DATA_FRAME_BUF << frame
+    end
+  end
+
+  def _receive_control_frame( frame )
+    $stderr << "[DEBUG] Control frame received : #{frame}\n"
   end
 
   EXT_PAYLOAD_SIZE_TABLE = { 126 => 2, 127 => 4 }
@@ -78,15 +116,20 @@ class ServerAgent
     unmasked_bytes.encode( Encoding::ASCII_8BIT )
     tmp_arr = []
     @buf_for_payload.each_byte do |b|
-      unmasked_bytes << ( b ^ key_bytes[key_byte_index] ).chr( Encoding::ASCII_8BIT )
+      b ^= key_bytes[key_byte_index]
+      unmasked_bytes << b.chr( Encoding::ASCII_8BIT )
       ( key_byte_index += 1 ) < key_bytes.length or key_byte_index = 0
     end
-    unmasked_bytes.force_encoding( Encoding::UTF_8 )
-    $stderr << "[DEBUG] #{unmasked_bytes}\n"
+    return Frame.create_frame( fin, rsv1, rsv2, rsv3, opcode, unmasked_bytes )
     if opcode == Frame::TYPE_CLOSE
-      CloseFrame.new
+      Frame.create_close_frame()#CloseFrame.new
+    elsif opcode == Frame::TYPE_TEXT
+      unmasked_bytes.force_encoding( Encoding::UTF_8 )
+      $stderr << "[DEBUG] #{unmasked_bytes}\n"
+      Frame.create_text_frame( unmasked_bytes, fin )
     else
-      Frame.new
+      $stderr << "not implemented yet (opcode : #{opcode})\n"
+      Frame.new()
     end
   end
 
