@@ -1,0 +1,33 @@
+= WebSocket プロトコルに関するメモ
+
+== Fail the WebSocket Connection
+
+{RFC 6455 の 7.1.7 節}[http://tools.ietf.org/html/rfc6455#section-7.1.7]
+参照.
+
+<em>Fail the WebSocket Connection</em> することを要求されることがある.
+そのときには, クライアントは <em>Close the WebSocket Connection</em>
+しなければならず (MUST), さらにユーザーに問題を報告してもよい (MAY).
+同様に, サーバーの場合も <em>Close the WebSocket Connection</em>
+しなければならず (MUST), さらに問題をログに残すべきである (SHOULD).
+
+<em>Fail the WebSocket Connection</em> が求められる前に
+<em>The WebSocket Connection is Established</em> であるならば,
+端末は <em>Close the WebSocket Connection</em>
+を実行する前に適切なステータスコードをもつ Close
+フレームを送信すべきである (SHOULD).
+相手側が適切に処理できないことがわかっているのであれば,
+Close フレームの送信を省略してもよい (MAY).
+<em>Fail the WebSocket Connection</em> が命じられた後は,
+端末はリモート端末からのデータ (Close フレームも含む)
+の処理を行ってはならない (MUST).
+
+== Handling of Invalid Data
+
+{RFC 6455 の 10.7 節}[http://tools.ietf.org/html/rfc6455#section-10.7]
+参照.
+
+WebSocket のハンドシェイクが成功した後に不正なデータを受け取った場合は,
+<em>Close the WebSocket Connection</em> の前に,
+端末は適切なステータスコードをもつ Close フレームを送信すべきである
+(SHOULD).
