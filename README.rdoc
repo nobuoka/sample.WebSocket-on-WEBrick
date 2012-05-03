@@ -15,8 +15,8 @@ WebSocket のサンプルです.
   $ ruby server.rb
 
 このサーバーはポート番号 10080 でリクエストを待ち受けます. 
-Firefox などで http://localhost:10080/ にアクセスすると, 
-\http://localhost:10080/websocket/test をターゲットとする WebSocket オブジェクトが作られます. 
+Firefox などで http\://localhost:10080/ にアクセスすると, 
+http\://localhost:10080/websocket/test をターゲットとする WebSocket オブジェクトが作られます. 
 現在実装の記述中です.
 
 == 動作環境
